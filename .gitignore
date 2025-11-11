@@ -1,0 +1,12 @@
+*.mp4
+*.avi
+*.log
+output/*
+.vscode/
+*.pyc
+__pycache__/*
+*.bin
+*.invz
+.DS_Store
+Thumbs.db
+ft-fsd-path-planning/
