@@ -2,8 +2,6 @@ import asyncio
 import time
 import logging
 from typing import Dict, List, Protocol, Any
-from core.utils.parquet_recorder import ParquetRecorder
-from core.utils.websocket_exporter import WebSocketExporter
 from core.data.plot_data import PlotData
 from core.utils.visualization import PlotManager
 from pathlib import Path
@@ -15,7 +13,7 @@ log = logging.getLogger("ControlManager")
 
 
 class Manager:
-    def __init__(self, providers, nodes, dt, enable_plots, output_dir, simulation=False, exporter: WebSocketExporter = None, recorder: ParquetRecorder = None):
+    def __init__(self, providers, nodes, dt, enable_plots, output_dir, simulation=False, exporter=None, recorder=None):
         log.info("Initializing Control Manager")
         self.providers = providers
         self.nodes = nodes

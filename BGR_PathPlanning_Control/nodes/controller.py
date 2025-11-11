@@ -7,9 +7,7 @@ from providers.sim.sim_util import sim_car_controls    # wrapper for AirSim comm
 from providers.sim.sim_util import FSDSClientSingleton
 # from visualization import PlotManager
 from core.data.car_state import State, States
-from core.utils.vcu import VCU, cleanup_vcus
 import time
-from core.scripts.serial_setup import get_devices
 import math
 # Get logger for this module
 log = logging.getLogger("Controller")
@@ -41,19 +39,7 @@ class Controller:
         self.steering_controller_type = steering_controller
         self.states = States()
         self.simulation = simulation
-        # temporary patch for run vcu setup for simulation
-        # devices = get_devices()  # Initialize devices, this will set up CAN if GPS_IMU is connected
-        # steering_port = devices.get("steering")
-        # self.vcu_steering = VCU(port_name=steering_port) if steering_port else None
-        # torque_port = devices.get("torque")
-        # self.vcu_tourqe = VCU(port_name=torque_port) if torque_port else None
 
-        if not self.simulation:
-            devices = get_devices()  # Initialize devices, this will set up CAN if GPS_IMU is connected
-            steering_port = devices.get("steering")
-            torque_port = devices.get("torque")
-            self.vcu_steering = VCU(port_name=steering_port) if steering_port else None
-            self.vcu_tourqe = VCU(port_name=torque_port) if torque_port else None
 
         self.first_time = True
         self.is_global_frame = is_global_frame
@@ -165,9 +151,8 @@ class Controller:
     def stop(self):
         log.info("Cleaning up Controller resources")
         if not self.simulation:
-            cleanup_vcus(self.vcu_steering, self.vcu_tourqe)
+            pass
         else:
-            log.info("Simulation mode, no VCU cleanup required")
             self.apply_controls(0.0, -1.0,stopped_flag=True)  # Stop the vehicle in simulation
             
 
@@ -175,40 +160,8 @@ class Controller:
         """
         Apply control commands to the vehicle.
         """
-        if self.simulation:
-            sim_car_controls(FSDSClientSingleton.instance(), -steering, acceleration, stopped_flag=stopped_flag)
+        
+        #if self.simulation:
+        sim_car_controls(FSDSClientSingleton.instance(), -steering, acceleration, stopped_flag=stopped_flag)
             
-            # if self.first_time and self.vcu_tourqe is not None and self.vcu_steering is not None:
-            #     log.info("First time applying controls, initializing VCU")
-            #     self.vcu_tourqe.set_torque(4.9)
-            #     self.vcu_steering.set_angle(0.0)
-            #     time.sleep(1)  # Allow time for VCU to initialize
-            #     self.first_time = False
-            # else:
-                # acceleration = 0.0 # roy_hack
-                # sim_car_controls(FSDSClientSingleton.instance(), -steering, acceleration)
-                # if self.vcu_tourqe is not None:
-                #     accel_cmd = acceleration*100 +1
-                #     accel_cmd = np.clip(accel_cmd, 0,5.01)  # Ensure acceleration command is within bounds
-                #     self.vcu_tourqe.set_torque(accel_cmd)  # Send acceleration command to VCU
-                #     log.info(f"acceleration command sent to VCU: {accel_cmd}")
-                # if self.vcu_steering is not None:
-                #     vcu_send_steering_angle = float(np.rad2deg(steering)*4.5)
-                #     vcu_send_steering_angle = np.clip(vcu_send_steering_angle, -75.0, 75.0)
-                #     self.vcu_steering.set_angle(vcu_send_steering_angle)
-                #     log.info(f"steering command sent to VCU: {vcu_send_steering_angle}")
-        else:
-            if self.vcu_tourqe is not None:
-                if self.first_time:
-                    self.vcu_tourqe.set_torque(6.0)
-                    self.vcu_steering.set_angle(0.0)
-                    time.sleep(0.1)  # Allow time for VCU to initialize
-                    self.first_time = False
-                else:
-                    accel_cmd = acceleration*100+7
-                    accel_cmd = np.clip(accel_cmd,0,10)
-                    self.vcu_tourqe.set_torque(accel_cmd)
-            if self.vcu_steering is not None:
-                vcu_send_steering_angle = float(np.rad2deg(steering)+(20*np.sign(math.sin(steering))))
-                vcu_send_steering_angle = np.clip(vcu_send_steering_angle, -75.0, 75.0)  # Ensure steering angle is within bounds
-                self.vcu_steering.set_angle(-vcu_send_steering_angle)
+            

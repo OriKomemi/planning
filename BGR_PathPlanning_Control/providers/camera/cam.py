@@ -1,6 +1,5 @@
 import asyncio
 import signal
-import websockets
 import cv2
 import base64
 import logging

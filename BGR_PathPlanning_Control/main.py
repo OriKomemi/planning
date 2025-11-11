@@ -7,8 +7,6 @@ import sys
 import os
 import time
 
-from core.utils.parquet_recorder import ParquetRecorder
-from core.utils.websocket_exporter import WebSocketExporter
 # Add project root to sys.path
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, project_root)
@@ -20,9 +18,6 @@ from providers.sim.car_state import SimCarStateProvider
 from providers.sim.cones     import SimConeProvider
 from providers.sim.map_data  import SimMapProvider
 from providers.sim.referee_state import SimRefereeStateProvider
-from providers.sim.cam_sim import SimCameraProvider
-from providers.lidar.cones   import LidarConeProvider
-from providers.lidar.cones_recording_provider import LidarConeRecordingProvider
 from providers.camera.cam import CameraProvider
 
 # Swap these two for ROS2 later:
@@ -32,7 +27,6 @@ from providers.camera.cam import CameraProvider
 from nodes.planner     import Planner
 from nodes.controller  import Controller
 from core.logger import init_logger
-from providers.gps_imu.python.gps_imu_provider  import GPSIMUProvider
 
 
 def cli() -> argparse.Namespace:
@@ -61,29 +55,27 @@ def build_manager(args):
             SimCarStateProvider(is_global_frame=args.global_ref),      # vehicle pose & twist
             SimConeProvider(is_global_frame=args.global_ref),          # simulated cones
             # SimRefereeStateProvider(is_global_frame=args.global_ref),  # referee state (Optional)
-            SimCameraProvider(),          # Camera provider for video streaming
         ]
         if args.global_ref:
             providers.append(SimMapProvider())
     else:
         providers = [
             # SimCarStateProvider(),      # vehicle pose & twist
-            LidarConeProvider(),          # LiDAR-derived track cones
             # LidarConeRecordingProvider(recording_path="/home/bgr/Desktop/competition/Recording_2025_05_24_17_27_12/",start_frame_num=0),  # LiDAR-derived track cones from recording
-            GPSIMUProvider(),          # GPS/IMU-derived vehicle pose
+
             CameraProvider(),      # Camera provider for video streaming
         ]
-
+    providers = [
+        SimCarStateProvider(is_global_frame=args.global_ref),      # vehicle pose & twist
+        SimConeProvider(is_global_frame=args.global_ref),          # simulated cones
+        # SimRefereeStateProvider(is_global_frame=args.global_ref),  # referee state (Optional)
+    ]
     nodes = [
         Planner(),               # produces path based on cones & map
         Controller(simulation=args.simulation,is_global_frame=args.global_ref,steering_controller=args.steering_controller)             # produces throttle / steer commands
-
+    
     ]
-    # Exporter for WebSocket communication
-    exporter = WebSocketExporter(port=8765,)
-    # recorder = ParquetRecorder("test_output.parquet", flush_every=1)
-    exporter.run_in_thread() 
-    return Manager(providers, nodes, dt=args.dt, enable_plots=args.plot, output_dir=args.output_dir, simulation=args.simulation, exporter=exporter)
+    return Manager(providers, nodes, dt=args.dt, enable_plots=args.plot, output_dir=args.output_dir, simulation=args.simulation, exporter=None)
 
 def main():
     args = cli()
