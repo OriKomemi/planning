@@ -18,12 +18,13 @@ class line:
         self.epsilon = float(epsilon)
         self.last_index = 0
         self.path = np.asarray(initial_position, dtype=float).reshape(1, 2) # reshape - ensure 2D array with one point
+        self.finished = False
 
     def add_stage(self, new_stage):
         """
         Merge a new array of (x, y) points into the existing path.
         """
-        if new_stage is None:
+        if new_stage is None or self.finished:
             return
 
         stage = np.asarray(new_stage, dtype=float) # ensure numpy array
@@ -40,13 +41,31 @@ class line:
         closest_index = self.__closest_point_index(self.path, start_point)
 
         if closest_index != -1:
-            self.path = np.vstack((self.path[:closest_index + 1], stage))
-
-    def end_lap(self):
+            self.path = np.vstack((self.path[:closest_index], stage))
+    
+    def get_path(self):
         """
         Returns a copy of the completed racing line.
         """
         return self.path.copy()
+    
+    def set_finished(self, finished=True):
+        '''
+        Set the finished state of the lap.
+        '''
+        self.finished = finished
+
+    def did_end_lap(self,point):
+        """
+        Check if the given point is close enough to the starting point to consider the lap finished.
+        """
+        if(len(self.path) == 1):
+            return False
+        
+        start_point = self.path[0]
+        distance_to_start = self.__distance(start_point, point)
+        # return distance_to_start < self.epsilon
+        return distance_to_start < 2 # 2 meters for testing purposes
 
     # -------------------------- utility functions ----------------------------- #
     def __distance(self, point1, point2):
@@ -105,7 +124,7 @@ def main():
     racing_line.add_stage(stage_three)
     racing_line.add_stage(stage_four)
 
-    result = racing_line.end_lap()
+    result = racing_line.get_path()
     print("Resulting racing line points:")
     print(result)
 
