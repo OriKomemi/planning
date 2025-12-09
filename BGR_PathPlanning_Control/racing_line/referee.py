@@ -127,7 +127,7 @@ def main():
     # cx, cy = path[:, 1], path[:, 2]
     # curve = path[:, 3]
     racing_line.cut_end()
-    racing_line.smooth_path()
+    racing_line.set_path(racing_line.smooth_path())
     cx, cy = racing_line.get_path()[:, 0], racing_line.get_path()[:, 1]
     
 
