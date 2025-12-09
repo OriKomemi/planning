@@ -13,7 +13,7 @@ from sub_modules import fsds
 import numpy as np
 import matplotlib.pyplot as plt
 from fsd_path_planning import PathPlanner, MissionTypes, ConeTypes
-from map import line
+from line import Line
 
 print("finished imports")
 
@@ -42,7 +42,7 @@ def main():
     cones_by_colors = {0: [], 1: [], 2: [], 3: [], 4: []}
     cones = referee_state.cones
     initial_position = referee_state.initial_position
-    racing_line = line(initial_position=(initial_position.x/100.0, initial_position.y/100.0), epsilon=0.75)
+    racing_line = Line(initial_position=(initial_position.x/100.0, initial_position.y/100.0), epsilon=0.75)
 
     print("finished initializing")
 
@@ -102,15 +102,16 @@ def main():
     y_point = initial_position.y/100.0
     car_position = np.array([x_point, y_point])
     car_direction = np.array([1.0, 0.0])
-
-    while(not racing_line.did_end_lap(car_position)):        
+    i = 0
+    while(not racing_line.did_end_lap(car_position) or i < 100):
+        i += 1        
         path = path_planner.calculate_path_in_global_frame(cones_by_type, car_position, car_direction) 
 
         # add stage
         racing_line.add_stage(path[:, 1:3])  # Add only the (x, y) coordinates to the racing line
         
         # update position and direction for next iteration
-        quarter_index = len(path) // 4
+        quarter_index = 2
         x_point = path[quarter_index, 1]
         y_point = path[quarter_index, 2]
         car_position = np.array([x_point, y_point])
@@ -125,6 +126,8 @@ def main():
     # Extract path coordinates
     # cx, cy = path[:, 1], path[:, 2]
     # curve = path[:, 3]
+    racing_line.cut_end()
+    racing_line.smooth_path()
     cx, cy = racing_line.get_path()[:, 0], racing_line.get_path()[:, 1]
     
 
