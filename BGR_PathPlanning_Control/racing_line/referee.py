@@ -42,7 +42,7 @@ def main():
     cones_by_colors = {0: [], 1: [], 2: [], 3: [], 4: []}
     cones = referee_state.cones
     initial_position = referee_state.initial_position
-    racing_line = Line(initial_position=(initial_position.x/100.0, initial_position.y/100.0), epsilon=0.75)
+    racing_line = Line(initial_position=(initial_position.x/100.0, initial_position.y/100.0), epsilon=2)
 
     print("finished initializing")
 

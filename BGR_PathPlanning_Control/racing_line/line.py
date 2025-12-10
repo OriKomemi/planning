@@ -10,17 +10,18 @@ class Line:
     merges new stages by snapping them to the closest existing point.
     """
 
-    def __init__(self, initial_position=(0.0, 0.0), epsilon=1.2):
+    def __init__(self, initial_position=(0.0, 0.0), epsilon=2.0):
         """
         Args:
             initial_position: tuple-like (x, y) starting position that should
                               always be part of the racing line.
             epsilon: maximum distance (m) to consider two points the same anchor.
         """
-        self.epsilon = float(epsilon)   # epsilon distance for matching points
-        self.last_index = 0             # last matched index to speed up search
+        self.epsilon = float(epsilon)                                       # epsilon distance for matching points
+        self.last_index = 0                                                 # last matched index to speed up search
         self.path = np.asarray(initial_position, dtype=float).reshape(1, 2) # reshape - ensure 2D array with one point
-        self.finished = False           # whether the lap is finished
+        self.finished = False                                               # whether the lap is finished
+        self.directives_cache = None                                        # cache for directives associated with the racing line
 
     def add_stage(self, new_stage):
         """
@@ -40,6 +41,7 @@ class Line:
         closest_index = self.__closest_point_index(self.path, start_point)
 
         if closest_index != -1:
+            self.last_index = closest_index
             self.path = np.vstack((self.path[:closest_index], stage))
     
     def get_path(self):
@@ -48,6 +50,8 @@ class Line:
         """
         return self.path.copy()
     
+    # Todo: set_path is dangerous because can be modified path without changing the other fields accordingly.
+    # Consider changing the class logic to include cut_end and smoothing as part of did_end_lap.
     def set_path(self, new_path: np.ndarray):
         """
         Set the racing line to a new path.
@@ -65,7 +69,12 @@ class Line:
 
     def did_end_lap(self,car_position):
         """
-        Check if the given point is close enough to the starting point to consider the lap finished.
+        Check if the car has completed a lap by comparing its current position
+        to the starting point of the racing line.   
+        Also sets the finished attribute to True if the lap is completed.
+
+        :param car_position: tuple-like (x, y) current position of the car.
+        :return boolean: True if the car is within epsilon distance of the starting point, False otherwise
         """
         if(len(self.path) == 1):
             return False
@@ -73,7 +82,8 @@ class Line:
         start_point = self.path[0]
         distance_to_start = self.__distance(start_point, car_position)
         # return distance_to_start < self.epsilon
-        return distance_to_start < 2 # 2 meters for testing purposes
+        self.finished = distance_to_start < 4 # 4 meters for testing purposes
+        return self.finished
 
     def smooth_path(self, path: np.ndarray = None):
         """
@@ -102,43 +112,91 @@ class Line:
         x_smooth = cs_x(t_new)
         y_smooth = cs_y(t_new)
 
+        self.cache_directives(cs_x, cs_y)
+
         smoothed_path = np.vstack((x_smooth, y_smooth)).T # shape (N, 2), creates (2, N) array and then transposes to (N, 2)
         return smoothed_path
 
     # -------------------------- utility functions ----------------------------- #
     def __distance(self, point1, point2):
-        delta = point1 - point2
-        return np.hypot(delta[0], delta[1])
+        return np.linalg.norm(point1 - point2)
 
     def __closest_point_index(self, path, point):
         """
-        Find the index of the point in `path` that is within epsilon of the given point.
-        Returns -1 if nothing is close enough.
+        Find the closest point to `point`, but only searching forward 
+        from last_index to preserve ordering.
         """
-        if path.size == 0:
-            return -1
-        min_dist = float('inf')
-        closest_index = -1
-        for i in range(self.last_index, len(path)):
-            # if self.__distance(path[i], point) < self.epsilon:
-            #     return i
-            # return -1
-            if self.__distance(path[i], point) < min_dist:
-                min_dist = self.__distance(path[i], point)
-                closest_index = i   
-            self.last_index = closest_index
-        return closest_index
 
+        start_idx = 0 if self.last_index >= len(path) else self.last_index
+
+        segment = path[start_idx:]                         # search only forward
+        d = np.linalg.norm(segment - point, axis=1)                 # distances to all points in segment(axis=1 -> row-wise)
+        
+        idx_local = np.argmin(d)
+        idx = start_idx + idx_local                        # convert to global index
+        
+        return idx if d[idx_local] < self.epsilon else -1
+    
     def cut_end(self):
         '''
         The function will look for the closest point to the start point in the path(from index) 
         and cut the rest of the path after that point.
+
+        Expects the last index to be before the start point.(will not work if the car already passed the start point)
         '''
         start_point = self.path[0]
         closest_index = self.__closest_point_index(self.path, start_point)
         if closest_index != -1:
             self.path = self.path[:closest_index]
             self.path = np.vstack((self.path, start_point)) # add start point to the end to close the loop
+
+    def cache_directives(self, cx: CubicSpline, cy: CubicSpline):
+        """
+        Cache the first 3 directives associated with the racing line.
+        Save them as CubicSpline objects for later use.
+        :param cx: cubic spline for x-coordinates.
+        :param cy: cubic spline for y-coordinates.
+        :param t:  index parameter for the splines.
+        """
+
+        dx = cx.derivative(1)
+        dy = cy.derivative(1)
+        ddx_dt2 = cx.derivative(2)
+        ddy_dt2 = cy.derivative(2)
+
+        self.directives_cache = {
+            'cx': cx,
+            'cy': cy,
+            'dx': dx,
+            'dy': dy,
+            'ddx_dt2': ddx_dt2,
+            'ddy_dt2': ddy_dt2
+        }
+
+    def calc_curvature(self, t: float):
+        """
+        Calculate the curvature at parameter t using the cached directives.
+        :param t: parameter along the spline.
+        :return: curvature value at t.
+        """
+        if self.directives_cache is None:
+            raise ValueError("Directives cache is empty. Please call cache_directives() first.")
+
+        dx = self.directives_cache['dx'](t)
+        dy = self.directives_cache['dy'](t)
+        ddx = self.directives_cache['ddx_dt2'](t)
+        ddy = self.directives_cache['ddy_dt2'](t)
+
+        numerator = dx * ddy - dy * ddx
+        denominator = (dx**2 + dy**2)**1.5
+
+        if denominator < 1e-12: # floating point rounding will NEVER give exact 0 - 'gpt'.
+           return 0.0
+
+        curvature = numerator / denominator
+        return curvature
+    
+
 
 def main():
     """
